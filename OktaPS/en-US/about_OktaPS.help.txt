@@ -1,0 +1,17 @@
+TOPIC
+    about_OktaPS
+SHORT DESCRIPTION
+    A module to interact with the Okta API
+
+LONG DESCRIPTION
+    A detailed module to interact with the Okta API, it can interact with IDPs, and groups
+	Based on the following modules: https://www.powershellgallery.com/packages/OktaAPI, https://github.com/mbegan/Okta-PSModule
+
+EXAMPLES
+    Cmdlets and Functions follow the offical PowerShell naming standard of verb-noun and everything is prefixed with *-Okta*
+
+KEYWORDS
+    Okta API Wesley Script
+
+SEE ALSO
+    http://developer.okta.com/docs/api/getting_started/design_principles.html
