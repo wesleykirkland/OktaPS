@@ -4,6 +4,7 @@ Set-OktaConfig -Token YourAPIToken -OktaOrg youroktaorg
 
 Currently Implemented Functions
   Add-OktaGroupMember
+  
   Add-OktaIdentityProviderGroup
   Convert-UnixTimeToDateTime
   Get-OktaAPILimit
