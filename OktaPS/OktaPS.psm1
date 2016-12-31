@@ -501,3 +501,85 @@ function Remove-OktaIdentityProviderGroup {
     }
 
 }
+
+#Function to get a okta users enrolled factors
+Function Get-OktaUserEnrolledFactors {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID
+    )
+
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors" -Headers $OktaHeaders)
+}
+
+#Function to get a specific factor of a Okta user
+Function Get-OktaUserFactor {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$FactorID
+    )
+
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders)
+}
+
+#Function to get available factors that a user can enroll in
+Function Get-OktaUserAvailableFactors {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('NOT_SETUP','ACTIVE')]
+        [String]$Status
+    )
+
+    $OktaUserAvailableFactors = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/catalog" -Headers $OktaHeaders)
+
+    if (!($Status)) {
+        $OktaUserAvailableFactors
+    } else {
+        $OktaUserAvailableFactors | Where-Object {($PSItem.status -eq $Status)}
+    }
+}
+
+#Function to get a specific factor of a Okta user
+Function Get-OktaUserAvailableFactorsSecurityQuestion {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID
+    )
+
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/questions" -Headers $OktaHeaders)
+}
+
+#Function to remove a Okta users factor
+Function Remove-OktaUserFactor {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+        [Parameter(Mandatory=$true,Position=1)]
+        [String]$FactorID
+    )
+
+    Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
+}
+
+Function Test-OktaUserTokenFactor {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$FactorID,
+        [Parameter(Mandatory=$true,Position=2)]
+        [String]$OTP
+    )
+
+    Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
+}
