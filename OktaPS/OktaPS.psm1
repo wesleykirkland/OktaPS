@@ -105,6 +105,16 @@ function Invoke-OktaPagedMethod {
     }
 }
 
+#Function to test the Okta API
+function Test-OktaAPI {
+    Try {
+        $Response = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
+    } Catch {
+        Write-Warning "Our API call to Okta failed $($Error[0].Exception.Message)"
+    }
+    Write-Output "$($Response.StatusCode)"
+}
+
 #################################################################################################################################################################################################################################
 #User related functions
 #################################################################################################################################################################################################################################
