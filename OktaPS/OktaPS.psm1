@@ -105,6 +105,16 @@ function Invoke-OktaPagedMethod {
     }
 }
 
+#Function to test the Okta API
+function Test-OktaAPI {
+    Try {
+        $Response = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
+    } Catch {
+        Write-Warning "Our API call to Okta failed $($Error[0].Exception.Message)"
+    }
+    Write-Output "$($Response.StatusCode)"
+}
+
 #################################################################################################################################################################################################################################
 #User related functions
 #################################################################################################################################################################################################################################
@@ -138,13 +148,13 @@ function Get-OktaUser {
 
     [CmdletBinding(DefaultParameterSetName='ByUserName')]
     param (
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByUserName',Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByUserName',Position=0,ValueFromPipeline=$True)]
         [Array]$Users,
 
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByUserID',Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByUserID',Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
 
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByEmailAddress',Position=0)]
+        [Parameter(Mandatory=$True,ParameterSetNam ='ByEmailAddress',Position=0)]
         [String]
         $Emails
     )
@@ -178,7 +188,7 @@ function Get-OktaUser {
 function Get-OktaUsers {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory=$false)]
         [ValidateSet('Any','STAGED','PROVISIONED','ACTIVE','RECOVERY','LOCKED_OUT','PASSWORD_EXPIRED','SUSPENDED','DEPROVISIONED')]
         [String]$Status
     )
@@ -209,7 +219,7 @@ function Get-OktaUsers {
 function Get-OktaUserGroups {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$id
     )
 
@@ -232,6 +242,24 @@ function Get-OktaUserWhoAmI {
     Write-Verbose "You are $($OktaUserWhoAmI.profile.login)"
 }
 
+#Function to update profile attributes on a Okta Users profile
+functon Update-OktaUserAttribute {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
+        [Array]$UserIDs,
+
+        [Parameter(Mandatory=$True,Position=1)]
+        [String]$AttributeName,
+
+        [Parameter(Mandatory=$True,Position=2)]
+        [string]$AttributeValue
+    )
+
+    Process {
+    }
+}
+
 #################################################################################################################################################################################################################################
 #Group Related Functions
 #################################################################################################################################################################################################################################
@@ -244,11 +272,11 @@ function Get-OktaGroups {
 function Get-OktaGroup {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
@@ -286,7 +314,7 @@ function New-OktaGroup ($GroupName, $GroupDescription) {
 function Update-OktaGroup {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]$GroupID
     )
 
@@ -306,7 +334,7 @@ function Update-OktaGroup {
 function Remove-OktaGroup {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)]
+        [Parameter(Mandatory=$True,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)]
         [Array]$ID
     )
 
@@ -327,11 +355,11 @@ function Remove-OktaGroup {
 function Get-OktaGroupMembers {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
@@ -347,9 +375,9 @@ function Get-OktaGroupMembers {
 function Add-OktaGroupMember {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
-        [Parameter(Mandatory = $True,Position=1,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True)]
         [Array]$GroupIDs
     )
 
@@ -374,9 +402,9 @@ function Add-OktaGroupMember {
 function Remove-OktaGroupMember {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
-        [Parameter(Mandatory = $True,Position=1,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True)]
         [Array]$GroupIDs
     )
 
@@ -398,11 +426,11 @@ function Remove-OktaGroupMember {
 function Get-OktaGroupApplicationAssignment {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
@@ -502,6 +530,9 @@ function Remove-OktaIdentityProviderGroup {
 
 }
 
+#################################################################################################################################################################################################################################
+#Factor Related Functions
+#################################################################################################################################################################################################################################
 #Function to get a okta users enrolled factors
 Function Get-OktaUserEnrolledFactors {
     [CmdletBinding()]
@@ -570,6 +601,7 @@ Function Remove-OktaUserFactor {
     Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
 }
 
+#Function to test a users hardware token factor
 Function Test-OktaUserTokenFactor {
     [CmdletBinding()]
     param (
