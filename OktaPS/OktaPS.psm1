@@ -242,21 +242,37 @@ function Get-OktaUserWhoAmI {
     Write-Verbose "You are $($OktaUserWhoAmI.profile.login)"
 }
 
-#Function to update profile attributes on a Okta Users profile
-functon Update-OktaUserAttribute {
+#Function to update profile attribute on a Okta Users profile
+function Update-OktaUserAttribute {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
-        [Array]$UserIDs,
+        [Array]$id,
 
         [Parameter(Mandatory=$True,Position=1)]
         [String]$AttributeName,
 
         [Parameter(Mandatory=$True,Position=2)]
+        [AllowEmptyString()]
         [string]$AttributeValue
     )
 
     Process {
+        #Build the PSCustomObject to convert to a JSON blob
+        $JSONTemplate = [PSCustomObject]@{
+            profile = [PSCustomObject]@{
+                $AttributeName = $AttributeValue
+            }
+        }
+
+        foreach ($UserID in $id) {
+            Try {
+                Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json) -Headers $OktaHeaders
+            } Catch {
+                Write-Warning "Unable to put attribute $($AttributeName) to $UserID"
+                Write-Output $_.Exception.Response.StatusCode.value__ 
+            }
+        }
     }
 }
 
