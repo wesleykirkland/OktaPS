@@ -154,7 +154,7 @@ function Get-OktaUser {
         [Parameter(Mandatory=$True,ParameterSetName='ByUserID',Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
 
-        [Parameter(Mandatory=$True,ParameterSetNam ='ByEmailAddress',Position=0)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByEmailAddress',Position=0)]
         [String]
         $Emails
     )
