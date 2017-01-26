@@ -631,3 +631,116 @@ Function Test-OktaUserTokenFactor {
 
     Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
 }
+
+#################################################################################################################################################################################################################################
+#Schema Related Functions
+#################################################################################################################################################################################################################################
+#Function to get the current Schema of the Okta User Profile
+function Get-OktaUserSchema {
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
+}
+
+#Function to get specific Schema type back from Okta
+function Get-OktaUserSchema {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [ValidateSet('base','custom')]
+        [string]$Type
+    )
+
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders).definitions.$($Type).properties
+}
+
+#Function to get back the entire JSON blob of the Okta Schema
+function Add-OktaUserSchemaAll {
+    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
+}
+
+function Add-OktaUserSchemaProperty {
+    [CmdletBinding()]
+    param (
+
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$AttributeName,
+
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$AttributeDescription,
+
+        [Parameter(Mandatory=$true,Position=2)]
+        [ValidateSet('string','boolean','date','number','integer','array')]
+        [string]$AttributeType = 'string',
+
+        [Parameter(Mandatory=$true,Position=3)]
+        [ValidateSet('HIDE','READ_ONLY','READ_WRITE')]
+        [string]$AttributeActionType = 'READ_WRITE',
+
+        [Parameter(Mandatory=$false)]
+        [int]$AttributeMinLength = 1,
+
+        [Parameter(Mandatory=$false)]
+        [int]$AttributeMaxLength = 25,
+
+        [Parameter(Mandatory=$false)]
+        [boolean]$AttributeRequired = $false
+    )
+
+    Write-Verbose 'Build the JSON for the Schema modification'
+    #http://developer.okta.com/docs/api/resources/schemas.html#user-profile-custom-subschema
+    $emptyarray = @()
+    $JSONTemplate = [PSCustomObject]@{
+        definitions = [PSCustomObject]@{
+            custom = [PSCustomObject]@{
+                id = '#custom'
+                type = 'object'
+                properties = [PSCustomObject]@{
+                    $AttributeName = [PSCustomObject]@{
+                        title = $AttributeName
+                        description = $AttributeDescription
+                        type = $AttributeType
+                        required = $AttributeRequired.ToString().ToLower()
+                        minLength = $AttributeMinLength
+                        maxLength = $AttributeMaxLength
+                        permissions = [PSCustomObject]@{
+                            principal = 'SELF'
+                            action = $AttributeActionType
+                        }
+                    }
+                }
+                required = $emptyarray
+            }
+        }
+    }
+
+<#
+$JSONTemplate = @"
+{
+    "definitions": {
+      "custom": {
+        "id": "#custom",
+        "type": "object",
+        "properties": {
+          "$AttributeName": {
+            "title": "$AttributeName",
+            "description": "$AttributeDescription",
+            "type": "$AttributeType",
+            "required": $($AttributeRequired.ToString().ToLower()),
+            "minLength": $AttributeMinLength,
+            "maxLength": $AttributeMaxLength,
+            "permissions": [
+              {
+                "principal": "SELF",
+                "action": "$AttributeActionType"
+              }
+            ]
+          }
+        },
+        "required": []
+      }
+    }
+  }
+"@
+#>
+
+    (Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders)
+}
