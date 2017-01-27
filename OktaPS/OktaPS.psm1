@@ -687,7 +687,7 @@ function Add-OktaUserSchemaProperty {
 
     Write-Verbose 'Build the JSON for the Schema modification'
     #http://developer.okta.com/docs/api/resources/schemas.html#user-profile-custom-subschema
-    $emptyarray = @()
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
     $JSONTemplate = [PSCustomObject]@{
         definitions = [PSCustomObject]@{
             custom = [PSCustomObject]@{
@@ -698,7 +698,7 @@ function Add-OktaUserSchemaProperty {
                         title = $AttributeName
                         description = $AttributeDescription
                         type = $AttributeType
-                        required = $AttributeRequired.ToString().ToLower()
+                        required = $($AttributeRequired)
                         minLength = $AttributeMinLength
                         maxLength = $AttributeMaxLength
                         permissions = [array][PSCustomObject]@{
@@ -712,38 +712,10 @@ function Add-OktaUserSchemaProperty {
         }
     }
 
-
-<#$JSONTemplateDefault = @"
-{
-    "definitions": {
-      "custom": {
-        "id": "#custom",
-        "type": "object",
-        "properties": {
-          "$AttributeName": {
-            "title": "$AttributeName",
-            "description": "$AttributeDescription",
-            "type": "$AttributeType",
-            "required": $($AttributeRequired.ToString().ToLower()),
-            "minLength": $AttributeMinLength,
-            "maxLength": $AttributeMaxLength,
-            "permissions": [
-              {
-                "principal": "SELF",
-                "action": "$AttributeActionType"
-              }
-            ]
-            "master": [
-                "type": "OKTA"
-            ]
-          }
-        },
-        "required": []
-      }
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to create $($AttributeName) in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
     }
-  }
-"@#>
-
-    (Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body $JSONTemplateDefault -Headers $OktaHeaders)
-    (Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders)
 }
