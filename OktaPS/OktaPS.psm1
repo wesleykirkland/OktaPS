@@ -653,7 +653,7 @@ function Get-OktaUserSchema {
 }
 
 #Function to get back the entire JSON blob of the Okta Schema
-function Add-OktaUserSchemaAll {
+function Get-OktaUserSchemaAll {
     (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
 }
 
@@ -701,7 +701,7 @@ function Add-OktaUserSchemaProperty {
                         required = $AttributeRequired.ToString().ToLower()
                         minLength = $AttributeMinLength
                         maxLength = $AttributeMaxLength
-                        permissions = [PSCustomObject]@{
+                        permissions = [array][PSCustomObject]@{
                             principal = 'SELF'
                             action = $AttributeActionType
                         }
@@ -712,8 +712,8 @@ function Add-OktaUserSchemaProperty {
         }
     }
 
-<#
-$JSONTemplate = @"
+
+<#$JSONTemplateDefault = @"
 {
     "definitions": {
       "custom": {
@@ -733,14 +733,17 @@ $JSONTemplate = @"
                 "action": "$AttributeActionType"
               }
             ]
+            "master": [
+                "type": "OKTA"
+            ]
           }
         },
         "required": []
       }
     }
   }
-"@
-#>
+"@#>
 
+    (Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body $JSONTemplateDefault -Headers $OktaHeaders)
     (Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders)
 }
