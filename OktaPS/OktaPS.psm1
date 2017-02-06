@@ -635,8 +635,8 @@ Function Test-OktaUserTokenFactor {
 #################################################################################################################################################################################################################################
 #Schema Related Functions
 #################################################################################################################################################################################################################################
-#Function to get the current Schema of the Okta User Profile
-function Get-OktaUserSchema {
+#Function to get back the entire JSON blob of the Okta Schema
+function Get-OktaUserSchemaAll {
     (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
 }
 
@@ -652,15 +652,10 @@ function Get-OktaUserSchema {
     (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders).definitions.$($Type).properties
 }
 
-#Function to get back the entire JSON blob of the Okta Schema
-function Get-OktaUserSchemaAll {
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
-}
-
+#Function to add a property to the Okta user schema
 function Add-OktaUserSchemaProperty {
     [CmdletBinding()]
     param (
-
         [Parameter(Mandatory=$true,Position=0)]
         [string]$AttributeName,
 
@@ -717,5 +712,74 @@ function Add-OktaUserSchemaProperty {
     } Catch {
         Write-Warning "Unable to create $($AttributeName) in $OktaOrg"
         Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#Function to remove a property from the Okta user schema
+function Remove-OktaUserSchemaProperty {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$AttributeName
+    )
+
+    Write-Verbose 'Build the JSON for the Schema modification'
+    #http://developer.okta.com/docs/api/resources/schemas.html#user-profile-custom-subschema
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        definitions = [PSCustomObject]@{
+            custom = [PSCustomObject]@{
+                id = '#custom'
+                type = 'object'
+                properties = [PSCustomObject]@{
+                    $AttributeName = $null
+                }
+                required = $emptyarray
+            }
+        }
+    }
+
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to remove $($AttributeName) in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#Function to Update a Okta user schema attribute
+function Update-OktaUserSchemaAttribute {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$AttributeName,
+
+        [Parameter(Mandatory=$true,Position=2)]
+        [AllowEmptyString()]
+        [string]$AttributeValue
+    )
+
+    Write-Verbose 'Build the JSON for the User modification'
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        profile = [PSCustomObject]@{
+            $AttributeName = $AttributeValue
+        }
+    }
+
+    Try {
+        $Response = Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+
+    if ($Response.Profile.$AttributeName -eq $AttributeValue) {
+        Write-Output "Successfully updated attribute $AttributeName"
+    } else {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
     }
 }
