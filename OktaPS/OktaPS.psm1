@@ -3,7 +3,11 @@
 #################################################################################################################################################################################################################################
 #Function to convert Epoch Time to a DateTime object
 function Convert-UnixTimeToDateTime([int]$UnixTime) {
-    [timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($UnixTime))
+    Try {
+        [timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($UnixTime))
+    } Catch {
+        Write-Warning "Wow you figured out how to break time? You broke her. You taught her time and time again that nothing she does, ever, is good enough."
+    }
 }
 
 #Function to build the configuration parameters to connect to Okta
@@ -21,27 +25,37 @@ function Set-OktaConfig {
     )
 
     Write-Verbose 'Building OktaHeaders to authenticate to Okta'
-    $OktaHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-    $OktaHeaders.Add("Authorization", "SSWS $Token")
-    $OktaHeaders.Add("Accept", 'application/json')
-    $OktaHeaders.Add("Content-Type", 'application/json')
-    $OktaHeaders | Set-Variable OktaHeaders -Scope Global
+    Try {
+        $OktaHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $OktaHeaders.Add("Authorization", "SSWS $Token")
+        $OktaHeaders.Add("Accept", 'application/json')
+        $OktaHeaders.Add("Content-Type", 'application/json')
+        $OktaHeaders | Set-Variable OktaHeaders -Scope Global
 
-    #Load the .Net type because it doesn't always load
-    Add-Type -AssemblyName System.Web
+        #Load the .Net type because it doesn't always load
+        Add-Type -AssemblyName System.Web
 
-    Write-Verbose 'Set the BaseURI for the Okta orgin'
-    if (!($Preview)) {$BaseURI = "https://$OktaOrg.okta.com/api/v1"} else {$BaseURI = "https://$OktaOrg.oktapreview.com/api/v1"}
+        Write-Verbose 'Set the BaseURI for the Okta orgin'
+        if (!($Preview)) {$BaseURI = "https://$OktaOrg.okta.com/api/v1"} else {$BaseURI = "https://$OktaOrg.oktapreview.com/api/v1"}
 
-    Write-Verbose 'Set some variables for use in the rest of the module'
-    $BaseURI | Set-Variable BaseURI -Scope Global
-    $OktaOrg | Set-Variable OktaOrg -Scope Global
+        Write-Verbose 'Set some variables for use in the rest of the module'
+        $BaseURI | Set-Variable BaseURI -Scope Global
+        $OktaOrg | Set-Variable OktaOrg -Scope Global
+    } Catch {
+        Write-Warning "Unable to build the Okta config, bailing out!"
+        exit
+    }
 }
 
 #Function to check our API Limit
 function Get-OktaAPILimit ($APILimitRange) {
     #Make a dumb API call and limit our response to avoid burning up resources, this must be Invoke-WebRequest and not Invoke-RestMethod
-    $OktaAPICall = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing | Select-Object -ExpandProperty Headers
+    Try {
+        $OktaAPICall = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing | Select-Object -ExpandProperty Headers
+    } Catch {
+        Write-Warning "Unable to make a dumb api call to $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 
     [int]$OktaAPIMaxCalls = ($OktaAPICall.GetEnumerator() | Where-Object {($PSItem.Key -eq 'X-Rate-Limit-Limit')}).Value
     [int]$OktaAPICurrentCalls = ($OktaAPICall.GetEnumerator() | Where-Object {($PSItem.Key -eq 'X-Rate-Limit-Remaining')}).Value
@@ -108,11 +122,11 @@ function Invoke-OktaPagedMethod {
 #Function to test the Okta API
 function Test-OktaAPI {
     Try {
-        $Response = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
+        Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
     } Catch {
         Write-Warning "Our API call to Okta failed $($Error[0].Exception.Message)"
     }
-    Write-Output "$($Response.StatusCode)"
+    Write-Output $_.Exception.Response.StatusCode.value__ 
 }
 
 #################################################################################################################################################################################################################################
@@ -177,8 +191,11 @@ function Get-OktaUser {
                 $OktaFilterString = 'profile.email eq "{0}"' -f $Email
                 $OktaFilterString = [System.Web.HttpUtility]::UrlEncode($OktaFilterString)
                 Try {
-                    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users?filter=$OktaFilterString" -Headers $OktaHeaders)
-                } Catch {Write-Warning "User $User does not exist in $OktaOrg"}
+                    Invoke-RestMethod -Method Get -Uri "$BaseURI/users?filter=$OktaFilterString" -Headers $OktaHeaders
+                } Catch {
+                    Write-Warning "$User does not exist in $OktaOrg"
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
+                }
             }
         }
     }
@@ -229,15 +246,24 @@ function Get-OktaUserGroups {
         foreach ($OktaId in $Id) {
             Write-Verbose "Getting the groups of $OktaID"
             Try {
-                (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$OktaId/groups" -Headers $OktaHeaders)
-            } Catch {Write-Warning "User $User does not exist in $OktaOrg"}
+                Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$OktaId/groups" -Headers $OktaHeaders
+            } Catch {
+                Write-Warning "Unable to find $OktaId $OktaOrg"
+                Write-Output $_.Exception.Response.StatusCode.value__ 
+            }
         }
     }
 }
 
 #Function to get Okta API User
 function Get-OktaUserWhoAmI {
-    $OktaUserWhoAmI = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/me" -Headers $OktaHeaders)
+    Try {
+        $OktaUserWhoAmI = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/me" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to find out who we are in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+
     $OktaUserWhoAmI
     Write-Verbose "You are $($OktaUserWhoAmI.profile.login)"
 }
@@ -301,12 +327,21 @@ function Get-OktaGroup {
     )
 
     if ($GroupName) {
-        (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}
-    }
-    elseif ($GroupID) {
+        Try {
+            (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}
+        } Catch {
+            Write-Warning "Unable to query $GroupName in  $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
+    } elseif ($GroupID) {
         $OktaFilterString = 'id eq "{0}"' -f $GroupID
         $OktaFilterString = [System.Web.HttpUtility]::UrlEncode($OktaFilterString)
-        Invoke-RestMethod -Method Get -Uri "$BaseURI/groups?filter=$OktaFilterString" -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Get -Uri "$BaseURI/groups?filter=$OktaFilterString" -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to query $GroupID in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 }
 
@@ -345,8 +380,13 @@ function Update-OktaGroup {
         }
     }
 
-    Write-Verbose 'Create the new group in okta'
-    Try {Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$GroupID" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json)} Catch {Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"}
+    Write-Verbose 'Update an existing group in okta'
+    Try {
+        Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$GroupID" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json)
+    } Catch {
+        Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to remove a group in the Okta Org
@@ -360,12 +400,13 @@ function Remove-OktaGroup {
     Process {
         foreach ($GroupID in $ID) {
             Write-Verbose 'Delete the group'
-            if ($ID) {
-                Try {
-                    Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$ID" -Headers $OktaHeaders
-                    if ($?) {Write-Output "Successfully deleted $GroupID from $OktaOrg"}
-                } Catch {Write-Warning "Unable to delete $GroupID in $OktaOrg"}
-            } else {Write-Warning "$GroupID was not found in $OktaOrg"}
+            Try {
+                Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$ID" -Headers $OktaHeaders
+                if ($?) {Write-Output "Successfully deleted $GroupID from $OktaOrg"}
+            } Catch {
+                Write-Warning "Unable to delete $GroupID in $OktaOrg"
+                Write-Output $_.Exception.Response.StatusCode.value__ 
+            }
         }
     }
 }
@@ -383,8 +424,11 @@ function Get-OktaGroupMembers {
         $GroupID
     )
 
-    if ($GroupName) {
+    Try {
         $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
+    } Catch {
+        Write-Warning "Unable to query for GroupID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
     }
     
     Invoke-OktaPagedMethod -Uri "$BaseURI/groups/$GroupID/users"
@@ -406,11 +450,10 @@ function Add-OktaGroupMember {
             foreach ($Group in $GroupIDs) {
                 Write-Verbose "Adding $User to $GroupID"
                 Try {
-                    (Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders)
-                    if ($?) {Write-Output "Successfully added user $User to group $Group in $OktaOrg"}
+                    Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
                 } Catch {
                     Write-Warning "Unable to add user $User to group $Group in $OktaOrg"
-                    Write-Output $_.Exception.Response.StatusCode.value__
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
                 }
             }
         }
@@ -433,9 +476,11 @@ function Remove-OktaGroupMember {
             foreach ($Group in $GroupIDs) {
                 Write-Verbose "Removing $User to $GroupID"
                 Try {
-                    (Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders)
-                    if ($?) {Write-Output "Successfully removed user $User from group $Group in $OktaOrg"}
-                } Catch {Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"}
+                    Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
+                } Catch {
+                    Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
+                }
             }
         }
     }
@@ -454,11 +499,16 @@ function Get-OktaGroupApplicationAssignment {
         $GroupID
     )
 
-    if ($GroupName) {
-        $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
-    }
+    Try {
+        if ($GroupName) {
+            $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
+        }
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups/$GroupID/apps" -Headers $OktaHeaders)
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups/$GroupID/apps" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get group application assignment(s) for $GroupID"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #################################################################################################################################################################################################################################
