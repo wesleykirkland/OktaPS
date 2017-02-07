@@ -246,33 +246,36 @@ function Get-OktaUserWhoAmI {
 function Update-OktaUserAttribute {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
-        [Array]$id,
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
 
-        [Parameter(Mandatory=$True,Position=1)]
-        [String]$AttributeName,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$AttributeName,
 
-        [Parameter(Mandatory=$True,Position=2)]
+        [Parameter(Mandatory=$true,Position=2)]
         [AllowEmptyString()]
         [string]$AttributeValue
     )
 
-    Process {
-        #Build the PSCustomObject to convert to a JSON blob
-        $JSONTemplate = [PSCustomObject]@{
-            profile = [PSCustomObject]@{
-                $AttributeName = $AttributeValue
-            }
+    Write-Verbose 'Build the JSON for the User modification'
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        profile = [PSCustomObject]@{
+            $AttributeName = $AttributeValue
         }
+    }
 
-        foreach ($UserID in $id) {
-            Try {
-                Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json) -Headers $OktaHeaders
-            } Catch {
-                Write-Warning "Unable to put attribute $($AttributeName) to $UserID"
-                Write-Output $_.Exception.Response.StatusCode.value__ 
-            }
-        }
+    Try {
+        $Response = Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+
+    if ($Response.Profile.$AttributeName -eq $AttributeValue) {
+        Write-Output "Successfully updated attribute $AttributeName"
+    } else {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
     }
 }
 
@@ -744,42 +747,5 @@ function Remove-OktaUserSchemaProperty {
     } Catch {
         Write-Warning "Unable to remove $($AttributeName) in $OktaOrg"
         Write-Output $_.Exception.Response.StatusCode.value__ 
-    }
-}
-
-#Function to Update a Okta user schema attribute
-function Update-OktaUserSchemaAttribute {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true,Position=0)]
-        [string]$UserID,
-
-        [Parameter(Mandatory=$true,Position=1)]
-        [string]$AttributeName,
-
-        [Parameter(Mandatory=$true,Position=2)]
-        [AllowEmptyString()]
-        [string]$AttributeValue
-    )
-
-    Write-Verbose 'Build the JSON for the User modification'
-    $emptyarray = @() #Required to make a blank array object in the JSON Blob
-    $JSONTemplate = [PSCustomObject]@{
-        profile = [PSCustomObject]@{
-            $AttributeName = $AttributeValue
-        }
-    }
-
-    Try {
-        $Response = Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
-    } Catch {
-        Write-Warning "Unable to update user attribute $($AttributeName)"
-        Write-Output $_.Exception.Response.StatusCode.value__ 
-    }
-
-    if ($Response.Profile.$AttributeName -eq $AttributeValue) {
-        Write-Output "Successfully updated attribute $AttributeName"
-    } else {
-        Write-Warning "Unable to update user attribute $($AttributeName)"
     }
 }
