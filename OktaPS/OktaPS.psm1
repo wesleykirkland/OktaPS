@@ -516,7 +516,12 @@ function Get-OktaGroupApplicationAssignment {
 #################################################################################################################################################################################################################################
 #Function to list out IDPs
 function Get-OktaIdentityProviders {
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to query IDPs in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get specific Identity Provider
@@ -527,7 +532,12 @@ function Get-OktaIdentityProvider {
         [string]$Name
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps?q=$Name" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps?q=$Name" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to query IDP $Name in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to add new Okta Identity Provider Group Sync Group IDs
@@ -562,7 +572,12 @@ function Add-OktaIdentityProviderGroup {
         #Replace the JSON groups and rebuild the JSON
         $IDPJSON.policy.provisioning.groups.filter = $GroupsToReplace
 
-        Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to add group to IDP $Name in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 
 }
@@ -594,7 +609,12 @@ function Remove-OktaIdentityProviderGroup {
         #Replace the JSON groups and rebuild the JSON
         $IDPJSON.policy.provisioning.groups.filter = $GroupIDsAll
 
-        Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to remove group from IDP $Name in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 
 }
@@ -610,7 +630,12 @@ Function Get-OktaUserEnrolledFactors {
         [string]$UserID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get Enrolled factors for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get a specific factor of a Okta user
@@ -623,7 +648,12 @@ Function Get-OktaUserFactor {
         [string]$FactorID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get available factors that a user can enroll in
@@ -637,7 +667,12 @@ Function Get-OktaUserAvailableFactors {
         [String]$Status
     )
 
-    $OktaUserAvailableFactors = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/catalog" -Headers $OktaHeaders)
+    Try {
+        $OktaUserAvailableFactors = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/catalog" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get available factors for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 
     if (!($Status)) {
         $OktaUserAvailableFactors
@@ -654,7 +689,12 @@ Function Get-OktaUserAvailableFactorsSecurityQuestion {
         [string]$UserID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/questions" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/questions" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get available factors security question for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to remove a Okta users factor
@@ -667,7 +707,12 @@ Function Remove-OktaUserFactor {
         [String]$FactorID
     )
 
-    Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
+    Try {
+        Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to remove factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to test a users hardware token factor
@@ -682,7 +727,12 @@ Function Test-OktaUserTokenFactor {
         [String]$OTP
     )
 
-    Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
+    } Catch {
+        Write-Warning "Unable to verify token factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #################################################################################################################################################################################################################################
@@ -690,7 +740,12 @@ Function Test-OktaUserTokenFactor {
 #################################################################################################################################################################################################################################
 #Function to get back the entire JSON blob of the Okta Schema
 function Get-OktaUserSchemaAll {
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get back the full Okta user schema in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get specific Schema type back from Okta
@@ -702,7 +757,12 @@ function Get-OktaUserSchema {
         [string]$Type
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders).definitions.$($Type).properties
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders).definitions.$($Type).properties
+    } Catch {
+        Write-Warning "Unable to get Okta User Schema in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to add a property to the Okta user schema
