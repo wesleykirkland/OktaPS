@@ -122,11 +122,11 @@ function Invoke-OktaPagedMethod {
 #Function to test the Okta API
 function Test-OktaAPI {
     Try {
-        Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
+        $Response = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing
     } Catch {
         Write-Warning "Our API call to Okta failed $($Error[0].Exception.Message)"
     }
-    Write-Output $_.Exception.Response.StatusCode.value__ 
+    Write-Output "$($Response.StatusCode)"
 }
 
 #################################################################################################################################################################################################################################
