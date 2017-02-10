@@ -3,7 +3,11 @@
 #################################################################################################################################################################################################################################
 #Function to convert Epoch Time to a DateTime object
 function Convert-UnixTimeToDateTime([int]$UnixTime) {
-    [timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($UnixTime))
+    Try {
+        [timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($UnixTime))
+    } Catch {
+        Write-Warning "Wow you figured out how to break time? You broke her. You taught her time and time again that nothing she does, ever, is good enough."
+    }
 }
 
 #Function to build the configuration parameters to connect to Okta
@@ -21,27 +25,37 @@ function Set-OktaConfig {
     )
 
     Write-Verbose 'Building OktaHeaders to authenticate to Okta'
-    $OktaHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-    $OktaHeaders.Add("Authorization", "SSWS $Token")
-    $OktaHeaders.Add("Accept", 'application/json')
-    $OktaHeaders.Add("Content-Type", 'application/json')
-    $OktaHeaders | Set-Variable OktaHeaders -Scope Global
+    Try {
+        $OktaHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $OktaHeaders.Add("Authorization", "SSWS $Token")
+        $OktaHeaders.Add("Accept", 'application/json')
+        $OktaHeaders.Add("Content-Type", 'application/json')
+        $OktaHeaders | Set-Variable OktaHeaders -Scope Global
 
-    #Load the .Net type because it doesn't always load
-    Add-Type -AssemblyName System.Web
+        #Load the .Net type because it doesn't always load
+        Add-Type -AssemblyName System.Web
 
-    Write-Verbose 'Set the BaseURI for the Okta orgin'
-    if (!($Preview)) {$BaseURI = "https://$OktaOrg.okta.com/api/v1"} else {$BaseURI = "https://$OktaOrg.oktapreview.com/api/v1"}
+        Write-Verbose 'Set the BaseURI for the Okta orgin'
+        if (!($Preview)) {$BaseURI = "https://$OktaOrg.okta.com/api/v1"} else {$BaseURI = "https://$OktaOrg.oktapreview.com/api/v1"}
 
-    Write-Verbose 'Set some variables for use in the rest of the module'
-    $BaseURI | Set-Variable BaseURI -Scope Global
-    $OktaOrg | Set-Variable OktaOrg -Scope Global
+        Write-Verbose 'Set some variables for use in the rest of the module'
+        $BaseURI | Set-Variable BaseURI -Scope Global
+        $OktaOrg | Set-Variable OktaOrg -Scope Global
+    } Catch {
+        Write-Warning "Unable to build the Okta config, bailing out!"
+        exit
+    }
 }
 
 #Function to check our API Limit
 function Get-OktaAPILimit ($APILimitRange) {
     #Make a dumb API call and limit our response to avoid burning up resources, this must be Invoke-WebRequest and not Invoke-RestMethod
-    $OktaAPICall = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing | Select-Object -ExpandProperty Headers
+    Try {
+        $OktaAPICall = Invoke-WebRequest -Method Head -Uri "$BaseURI/groups?limit=1" -Headers $OktaHeaders -UseBasicParsing | Select-Object -ExpandProperty Headers
+    } Catch {
+        Write-Warning "Unable to make a dumb api call to $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 
     [int]$OktaAPIMaxCalls = ($OktaAPICall.GetEnumerator() | Where-Object {($PSItem.Key -eq 'X-Rate-Limit-Limit')}).Value
     [int]$OktaAPICurrentCalls = ($OktaAPICall.GetEnumerator() | Where-Object {($PSItem.Key -eq 'X-Rate-Limit-Remaining')}).Value
@@ -148,13 +162,13 @@ function Get-OktaUser {
 
     [CmdletBinding(DefaultParameterSetName='ByUserName')]
     param (
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByUserName',Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByUserName',Position=0,ValueFromPipeline=$True)]
         [Array]$Users,
 
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByUserID',Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByUserID',Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
 
-        [Parameter(Mandatory = $True,ParameterSetName = 'ByEmailAddress',Position=0)]
+        [Parameter(Mandatory=$True,ParameterSetName='ByEmailAddress',Position=0)]
         [String]
         $Emails
     )
@@ -177,8 +191,11 @@ function Get-OktaUser {
                 $OktaFilterString = 'profile.email eq "{0}"' -f $Email
                 $OktaFilterString = [System.Web.HttpUtility]::UrlEncode($OktaFilterString)
                 Try {
-                    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users?filter=$OktaFilterString" -Headers $OktaHeaders)
-                } Catch {Write-Warning "User $User does not exist in $OktaOrg"}
+                    Invoke-RestMethod -Method Get -Uri "$BaseURI/users?filter=$OktaFilterString" -Headers $OktaHeaders
+                } Catch {
+                    Write-Warning "$User does not exist in $OktaOrg"
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
+                }
             }
         }
     }
@@ -188,7 +205,7 @@ function Get-OktaUser {
 function Get-OktaUsers {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory=$false)]
         [ValidateSet('Any','STAGED','PROVISIONED','ACTIVE','RECOVERY','LOCKED_OUT','PASSWORD_EXPIRED','SUSPENDED','DEPROVISIONED')]
         [String]$Status
     )
@@ -219,7 +236,7 @@ function Get-OktaUsers {
 function Get-OktaUserGroups {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$id
     )
 
@@ -229,17 +246,63 @@ function Get-OktaUserGroups {
         foreach ($OktaId in $Id) {
             Write-Verbose "Getting the groups of $OktaID"
             Try {
-                (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$OktaId/groups" -Headers $OktaHeaders)
-            } Catch {Write-Warning "User $User does not exist in $OktaOrg"}
+                Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$OktaId/groups" -Headers $OktaHeaders
+            } Catch {
+                Write-Warning "Unable to find $OktaId $OktaOrg"
+                Write-Output $_.Exception.Response.StatusCode.value__ 
+            }
         }
     }
 }
 
 #Function to get Okta API User
 function Get-OktaUserWhoAmI {
-    $OktaUserWhoAmI = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/me" -Headers $OktaHeaders)
+    Try {
+        $OktaUserWhoAmI = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/me" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to find out who we are in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+
     $OktaUserWhoAmI
     Write-Verbose "You are $($OktaUserWhoAmI.profile.login)"
+}
+
+#Function to update profile attribute on a Okta Users profile
+function Update-OktaUserAttribute {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$UserID,
+
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$AttributeName,
+
+        [Parameter(Mandatory=$true,Position=2)]
+        [AllowEmptyString()]
+        [string]$AttributeValue
+    )
+
+    Write-Verbose 'Build the JSON for the User modification'
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        profile = [PSCustomObject]@{
+            $AttributeName = $AttributeValue
+        }
+    }
+
+    Try {
+        $Response = Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+
+    if ($Response.Profile.$AttributeName -eq $AttributeValue) {
+        Write-Output "Successfully updated attribute $AttributeName"
+    } else {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
+    }
 }
 
 #################################################################################################################################################################################################################################
@@ -254,22 +317,31 @@ function Get-OktaGroups {
 function Get-OktaGroup {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
 
     if ($GroupName) {
-        (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}
-    }
-    elseif ($GroupID) {
+        Try {
+            (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}
+        } Catch {
+            Write-Warning "Unable to query $GroupName in  $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
+    } elseif ($GroupID) {
         $OktaFilterString = 'id eq "{0}"' -f $GroupID
         $OktaFilterString = [System.Web.HttpUtility]::UrlEncode($OktaFilterString)
-        Invoke-RestMethod -Method Get -Uri "$BaseURI/groups?filter=$OktaFilterString" -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Get -Uri "$BaseURI/groups?filter=$OktaFilterString" -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to query $GroupID in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 }
 
@@ -296,7 +368,7 @@ function New-OktaGroup ($GroupName, $GroupDescription) {
 function Update-OktaGroup {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]$GroupID
     )
 
@@ -308,27 +380,33 @@ function Update-OktaGroup {
         }
     }
 
-    Write-Verbose 'Create the new group in okta'
-    Try {Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$GroupID" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json)} Catch {Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"}
+    Write-Verbose 'Update an existing group in okta'
+    Try {
+        Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$GroupID" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json)
+    } Catch {
+        Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to remove a group in the Okta Org
 function Remove-OktaGroup {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)]
+        [Parameter(Mandatory=$True,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)]
         [Array]$ID
     )
 
     Process {
         foreach ($GroupID in $ID) {
             Write-Verbose 'Delete the group'
-            if ($ID) {
-                Try {
-                    Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$ID" -Headers $OktaHeaders
-                    if ($?) {Write-Output "Successfully deleted $GroupID from $OktaOrg"}
-                } Catch {Write-Warning "Unable to delete $GroupID in $OktaOrg"}
-            } else {Write-Warning "$GroupID was not found in $OktaOrg"}
+            Try {
+                Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$ID" -Headers $OktaHeaders
+                if ($?) {Write-Output "Successfully deleted $GroupID from $OktaOrg"}
+            } Catch {
+                Write-Warning "Unable to delete $GroupID in $OktaOrg"
+                Write-Output $_.Exception.Response.StatusCode.value__ 
+            }
         }
     }
 }
@@ -337,17 +415,20 @@ function Remove-OktaGroup {
 function Get-OktaGroupMembers {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
 
-    if ($GroupName) {
+    Try {
         $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
+    } Catch {
+        Write-Warning "Unable to query for GroupID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
     }
     
     Invoke-OktaPagedMethod -Uri "$BaseURI/groups/$GroupID/users"
@@ -357,9 +438,9 @@ function Get-OktaGroupMembers {
 function Add-OktaGroupMember {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
-        [Parameter(Mandatory = $True,Position=1,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True)]
         [Array]$GroupIDs
     )
 
@@ -369,11 +450,10 @@ function Add-OktaGroupMember {
             foreach ($Group in $GroupIDs) {
                 Write-Verbose "Adding $User to $GroupID"
                 Try {
-                    (Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders)
-                    if ($?) {Write-Output "Successfully added user $User to group $Group in $OktaOrg"}
+                    Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
                 } Catch {
                     Write-Warning "Unable to add user $User to group $Group in $OktaOrg"
-                    Write-Output $_.Exception.Response.StatusCode.value__
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
                 }
             }
         }
@@ -384,9 +464,9 @@ function Add-OktaGroupMember {
 function Remove-OktaGroupMember {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $True,Position=0,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=0,ValueFromPipeline=$True)]
         [Array]$UserIDs,
-        [Parameter(Mandatory = $True,Position=1,ValueFromPipeline=$True)]
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True)]
         [Array]$GroupIDs
     )
 
@@ -396,9 +476,11 @@ function Remove-OktaGroupMember {
             foreach ($Group in $GroupIDs) {
                 Write-Verbose "Removing $User to $GroupID"
                 Try {
-                    (Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders)
-                    if ($?) {Write-Output "Successfully removed user $User from group $Group in $OktaOrg"}
-                } Catch {Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"}
+                    Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
+                } Catch {
+                    Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"
+                    Write-Output $_.Exception.Response.StatusCode.value__ 
+                }
             }
         }
     }
@@ -408,20 +490,25 @@ function Remove-OktaGroupMember {
 function Get-OktaGroupApplicationAssignment {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupName')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
         [String]
         $GroupName,
 
-        [Parameter(Mandatory = $true, Position=0, ParameterSetName = 'ByGroupId')]
+        [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupId')]
         [String]
         $GroupID
     )
 
-    if ($GroupName) {
-        $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
-    }
+    Try {
+        if ($GroupName) {
+            $GroupID = ((Invoke-RestMethod -Method Get -Uri "$BaseURI/groups" -Headers $OktaHeaders) | Where-Object {($PSItem.profile.name -like $GroupName)}).id
+        }
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups/$GroupID/apps" -Headers $OktaHeaders)
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/groups/$GroupID/apps" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get group application assignment(s) for $GroupID"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #################################################################################################################################################################################################################################
@@ -429,7 +516,12 @@ function Get-OktaGroupApplicationAssignment {
 #################################################################################################################################################################################################################################
 #Function to list out IDPs
 function Get-OktaIdentityProviders {
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to query IDPs in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get specific Identity Provider
@@ -440,7 +532,12 @@ function Get-OktaIdentityProvider {
         [string]$Name
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps?q=$Name" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/idps?q=$Name" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to query IDP $Name in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to add new Okta Identity Provider Group Sync Group IDs
@@ -475,7 +572,12 @@ function Add-OktaIdentityProviderGroup {
         #Replace the JSON groups and rebuild the JSON
         $IDPJSON.policy.provisioning.groups.filter = $GroupsToReplace
 
-        Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to add group to IDP $Name in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 
 }
@@ -507,11 +609,19 @@ function Remove-OktaIdentityProviderGroup {
         #Replace the JSON groups and rebuild the JSON
         $IDPJSON.policy.provisioning.groups.filter = $GroupIDsAll
 
-        Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        Try {
+            Invoke-RestMethod -Method Put -Uri "$BaseURI/idps/$($IDPJSON.id)" -Body ($IDPJSON | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+        } Catch {
+            Write-Warning "Unable to remove group from IDP $Name in $OktaOrg"
+            Write-Output $_.Exception.Response.StatusCode.value__ 
+        }
     }
 
 }
 
+#################################################################################################################################################################################################################################
+#Factor Related Functions
+#################################################################################################################################################################################################################################
 #Function to get a okta users enrolled factors
 Function Get-OktaUserEnrolledFactors {
     [CmdletBinding()]
@@ -520,7 +630,12 @@ Function Get-OktaUserEnrolledFactors {
         [string]$UserID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get Enrolled factors for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get a specific factor of a Okta user
@@ -533,7 +648,12 @@ Function Get-OktaUserFactor {
         [string]$FactorID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to get available factors that a user can enroll in
@@ -547,7 +667,12 @@ Function Get-OktaUserAvailableFactors {
         [String]$Status
     )
 
-    $OktaUserAvailableFactors = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/catalog" -Headers $OktaHeaders)
+    Try {
+        $OktaUserAvailableFactors = (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/catalog" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get available factors for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 
     if (!($Status)) {
         $OktaUserAvailableFactors
@@ -564,7 +689,12 @@ Function Get-OktaUserAvailableFactorsSecurityQuestion {
         [string]$UserID
     )
 
-    (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/questions" -Headers $OktaHeaders)
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/users/$UserID/factors/questions" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get available factors security question for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
 #Function to remove a Okta users factor
@@ -577,9 +707,15 @@ Function Remove-OktaUserFactor {
         [String]$FactorID
     )
 
-    Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
+    Try {
+        Invoke-RestMethod -Method Delete -Uri "$BaseURI/users/$UserID/factors/$FactorID" -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to remove factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
 
+#Function to test a users hardware token factor
 Function Test-OktaUserTokenFactor {
     [CmdletBinding()]
     param (
@@ -591,5 +727,135 @@ Function Test-OktaUserTokenFactor {
         [String]$OTP
     )
 
-    Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID/factors/$FactorID/verify" -Headers $OktaHeaders -Body ([PSCustomObject]@{passcode = $OTP} | ConvertTo-Json)
+    } Catch {
+        Write-Warning "Unable to verify token factor $FactorID for $UserID in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#################################################################################################################################################################################################################################
+#Schema Related Functions
+#################################################################################################################################################################################################################################
+#Function to get back the entire JSON blob of the Okta Schema
+function Get-OktaUserSchemaAll {
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders)
+    } Catch {
+        Write-Warning "Unable to get back the full Okta user schema in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#Function to get specific Schema type back from Okta
+function Get-OktaUserSchema {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [ValidateSet('base','custom')]
+        [string]$Type
+    )
+
+    Try {
+        (Invoke-RestMethod -Method Get -Uri "$BaseURI/meta/schemas/user/default" -Headers $OktaHeaders).definitions.$($Type).properties
+    } Catch {
+        Write-Warning "Unable to get Okta User Schema in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#Function to add a property to the Okta user schema
+function Add-OktaUserSchemaProperty {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$AttributeName,
+
+        [Parameter(Mandatory=$true,Position=1)]
+        [string]$AttributeDescription,
+
+        [Parameter(Mandatory=$true,Position=2)]
+        [ValidateSet('string','boolean','date','number','integer','array')]
+        [string]$AttributeType = 'string',
+
+        [Parameter(Mandatory=$true,Position=3)]
+        [ValidateSet('HIDE','READ_ONLY','READ_WRITE')]
+        [string]$AttributeActionType = 'READ_WRITE',
+
+        [Parameter(Mandatory=$false)]
+        [int]$AttributeMinLength = 1,
+
+        [Parameter(Mandatory=$false)]
+        [int]$AttributeMaxLength = 25,
+
+        [Parameter(Mandatory=$false)]
+        [boolean]$AttributeRequired = $false
+    )
+
+    Write-Verbose 'Build the JSON for the Schema modification'
+    #http://developer.okta.com/docs/api/resources/schemas.html#user-profile-custom-subschema
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        definitions = [PSCustomObject]@{
+            custom = [PSCustomObject]@{
+                id = '#custom'
+                type = 'object'
+                properties = [PSCustomObject]@{
+                    $AttributeName = [PSCustomObject]@{
+                        title = $AttributeName
+                        description = $AttributeDescription
+                        type = $AttributeType
+                        required = $($AttributeRequired)
+                        minLength = $AttributeMinLength
+                        maxLength = $AttributeMaxLength
+                        permissions = [array][PSCustomObject]@{
+                            principal = 'SELF'
+                            action = $AttributeActionType
+                        }
+                    }
+                }
+                required = $emptyarray
+            }
+        }
+    }
+
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to create $($AttributeName) in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
+}
+
+#Function to remove a property from the Okta user schema
+function Remove-OktaUserSchemaProperty {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]
+        [string]$AttributeName
+    )
+
+    Write-Verbose 'Build the JSON for the Schema modification'
+    #http://developer.okta.com/docs/api/resources/schemas.html#user-profile-custom-subschema
+    $emptyarray = @() #Required to make a blank array object in the JSON Blob
+    $JSONTemplate = [PSCustomObject]@{
+        definitions = [PSCustomObject]@{
+            custom = [PSCustomObject]@{
+                id = '#custom'
+                type = 'object'
+                properties = [PSCustomObject]@{
+                    $AttributeName = $null
+                }
+                required = $emptyarray
+            }
+        }
+    }
+
+    Try {
+        Invoke-RestMethod -Method Post -Uri "$BaseURI/meta/schemas/user/default" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch {
+        Write-Warning "Unable to remove $($AttributeName) in $OktaOrg"
+        Write-Output $_.Exception.Response.StatusCode.value__ 
+    }
 }
