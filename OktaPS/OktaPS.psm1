@@ -66,7 +66,7 @@ function Get-OktaAPILimit ($APILimitRange) {
     Write-Verbose "We have $OktaAPICurrentCalls Okta API calls left"
 
     if ($OktaAPICurrentCalls -lt $APILimitRange) {
-        Write-Verbose "Sleeping for $($DateTimeConversion * -1) seconds because we have $OktaAPICurrentCalls api calls left"
+        Write-Verbose "Sleeping for $($DateTimeConversion * -1) seconds because we have $OktaAPICurrentCalls api calls left which is below the $APILimitRange"
         Start-Sleep ($DateTimeConversion * -1)
     }
 
