@@ -300,8 +300,6 @@ function Update-OktaUserAttribute {
 
     if ($Response.Profile.$AttributeName -eq $AttributeValue) {
         Write-Output "Successfully updated attribute $AttributeName"
-    } else {
-        Write-Warning "Unable to update user attribute $($AttributeName)"
     }
 }
 
