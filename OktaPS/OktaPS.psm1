@@ -367,7 +367,13 @@ function Update-OktaGroup {
     [CmdletBinding(DefaultParameterSetName='ByGroupName')]
     param (
         [Parameter(Mandatory=$true,Position=0,ParameterSetName='ByGroupName')]
-        [String]$GroupID
+        [String]$GroupID,
+
+        [Parameter(Mandatory=$true,Position=1,ParameterSetName='ByGroupName')]
+        [String]$GroupName,
+
+        [Parameter(Mandatory=$false,Position=2,ParameterSetName='ByGroupName')]
+        [String]$GroupDescription
     )
 
     Write-Verbose 'Build the JSON for the group'
