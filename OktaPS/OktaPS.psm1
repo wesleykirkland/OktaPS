@@ -63,7 +63,7 @@ function Get-OktaAPILimit ($APILimitRange) {
 
     $DateTimeConversion = ((Get-Date) - (Convert-UnixTimeToDateTime -UnixTime $OktaAPIResetTime)).Seconds
 
-    Write-Verbose "We have $OktaAPICurrentCalls Okta API calls left"
+    Write-Debug "We have $OktaAPICurrentCalls Okta API calls left"
 
     if ($OktaAPICurrentCalls -lt $APILimitRange) {
         Write-Verbose "Sleeping for $($DateTimeConversion * -1) seconds because we have $OktaAPICurrentCalls api calls left which is below the $APILimitRange"
