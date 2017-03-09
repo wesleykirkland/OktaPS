@@ -175,7 +175,7 @@ function Get-OktaUser {
 
     Process {
         #Put UsersID into Users if specified
-        if ($UsersID) {$Users = $UserIDs}
+        if ($UsersIDs) {$Users = $UserIDs}
 
         if ($Users) {
             foreach ($User in $Users) {
