@@ -293,6 +293,9 @@ function Update-OktaUserAttribute {
 
     Try {
         $Response = Invoke-RestMethod -Method Post -Uri "$BaseURI/users/$UserID" -Body ($JSONTemplate | ConvertTo-Json -Depth 20) -Headers $OktaHeaders
+    } Catch [System.Net.WebExceptionStatus] {
+        Write-Warning "Unable to update user attribute $($AttributeName)"
+        Write-Output '400' #Hardcode a status code so the error logic is handled within
     } Catch {
         Write-Warning "Unable to update user attribute $($AttributeName)"
         Write-Output $_.Exception.Response.StatusCode.value__ 
@@ -356,6 +359,9 @@ function New-OktaGroup ($GroupName, $GroupDescription) {
     Write-Verbose 'Create the new group in okta'
     Try {
         Invoke-RestMethod -Method Post -Uri "$BaseURI/groups" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json) 
+    } Catch [System.Net.WebExceptionStatus] {
+        Write-Warning "Unable to create $($JSONTemplate.profile.name) in $OktaOrg"
+        Write-Output '400' #Hardcode a status code so the error logic is handled within
     } Catch {
         Write-Warning "Unable to create $($JSONTemplate.profile.name) in $OktaOrg"
         Write-Output $_.Exception.Response.StatusCode.value__ 
@@ -387,6 +393,9 @@ function Update-OktaGroup {
     Write-Verbose 'Update an existing group in okta'
     Try {
         Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$GroupID" -Headers $OktaHeaders -Body ($JSONTemplate | ConvertTo-Json)
+    } Catch [System.Net.WebExceptionStatus] {
+        Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"
+        Write-Output '400' #Hardcode a status code so the error logic is handled within
     } Catch {
         Write-Warning "Unable to update Group ID $GroupID in $OktaOrg"
         Write-Output $_.Exception.Response.StatusCode.value__ 
@@ -407,6 +416,9 @@ function Remove-OktaGroup {
             Try {
                 Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$ID" -Headers $OktaHeaders
                 if ($?) {Write-Output "Successfully deleted $GroupID from $OktaOrg"}
+            } Catch [System.Net.WebExceptionStatus] {
+                Write-Warning "Unable to delete $GroupID in $OktaOrg"
+                Write-Output '400' #Hardcode a status code so the error logic is handled within
             } Catch {
                 Write-Warning "Unable to delete $GroupID in $OktaOrg"
                 Write-Output $_.Exception.Response.StatusCode.value__ 
@@ -455,6 +467,9 @@ function Add-OktaGroupMember {
                 Write-Verbose "Adding $User to $GroupID"
                 Try {
                     Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
+                } Catch [System.Net.WebExceptionStatus] {
+                    Write-Warning "Unable to add user $User to group $Group in $OktaOrg"
+                    Write-Output '400' #Hardcode a status code so the error logic is handled within
                 } Catch {
                     Write-Warning "Unable to add user $User to group $Group in $OktaOrg"
                     Write-Output $_.Exception.Response.StatusCode.value__ 
@@ -481,6 +496,9 @@ function Remove-OktaGroupMember {
                 Write-Verbose "Removing $User to $GroupID"
                 Try {
                     Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
+                } Catch [System.Net.WebExceptionStatus] {
+                    Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"
+                    Write-Output '400' #Hardcode a status code so the error logic is handled within
                 } Catch {
                     Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"
                     Write-Output $_.Exception.Response.StatusCode.value__ 
