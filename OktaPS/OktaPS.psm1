@@ -298,7 +298,11 @@ function Update-OktaUserAttribute {
         Write-Output '400' #Hardcode a status code so the error logic is handled within
     } Catch {
         Write-Warning "Unable to update user attribute $($AttributeName)"
-        Write-Output $_.Exception.Response.StatusCode.value__ 
+        if ($_.Exception.Response.StatusCode.value__) {
+            Write-Output $_.Exception.Response.StatusCode.value__
+        } else {
+            Write-Output '400' #Hardcode a status code so the error logic is handled within
+        }
     }
 
     if ($Response.Profile.$AttributeName -eq $AttributeValue) {
