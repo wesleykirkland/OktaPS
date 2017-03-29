@@ -468,7 +468,7 @@ function Add-OktaGroupMember {
         foreach ($User in $UserIDs) {
             Write-Verbose "Adding groups for $User"
             foreach ($Group in $GroupIDs) {
-                Write-Verbose "Adding $User to $GroupID"
+                Write-Verbose "Adding $User to $Group"
                 Try {
                     Invoke-RestMethod -Method Put -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
                 } Catch [System.Net.WebExceptionStatus] {
