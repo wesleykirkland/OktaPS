@@ -500,7 +500,7 @@ function Remove-OktaGroupMember {
                 Write-Verbose "Removing $User to $GroupID"
                 Try {
                     Invoke-RestMethod -Method Delete -Uri "$BaseURI/groups/$Group/users/$User" -Headers $OktaHeaders
-                } Catch [System.Net.WebExceptionStatus] {
+                } Catch [System.Net.WebException] {
                     Write-Warning "Unable to remove user $User from group $Group in $OktaOrg"
                     Write-Output '400' #Hardcode a status code so the error logic is handled within
                 } Catch {
